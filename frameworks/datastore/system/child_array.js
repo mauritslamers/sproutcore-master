@@ -281,7 +281,8 @@ SC.ChildArray = SC.Object.extend(SC.Enumerable, SC.Array,
     record.writeAttribute(pname,children);
     // notify that the record did change...
     record.recordDidChange(pname);
-    this.enumerableContentDidChange();
+    this.arrayContentDidChange(0,len,children.length);
+    //this.enumerableContentDidChange();
     return this;
   },
 
@@ -324,6 +325,8 @@ SC.ChildArray = SC.Object.extend(SC.Enumerable, SC.Array,
     @returns {SC.ChildArray} itself.
   */
   recordPropertyDidChange: function(keys) {
+    var len = this.get('length');
+    this.arrayContentDidChange(0,len,len);
     return this;
   },
 
@@ -339,8 +342,8 @@ SC.ChildArray = SC.Object.extend(SC.Enumerable, SC.Array,
   */
   _childrenContentDidChange: function(start, removedCount, addedCount) {
     this._records = null ; // clear cache
-    //this.arrayContentDidChange(start, removedCount, addedCount);
-    this.enumerableContentDidChange(); // not sure what would be wise here regarding new changes
+    this.arrayContentDidChange(start, removedCount, addedCount);
+    //this.enumerableContentDidChange(); // not sure what would be wise here regarding new changes
   },
 
   // /** @private */
