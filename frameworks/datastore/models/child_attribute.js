@@ -49,7 +49,7 @@ SC.ChildAttribute = SC.RecordAttribute.extend(
   fromType: function(record, key, value){
     var sk, store, ret, attrs, attrkey = this.get('key') || key;
     if (record){
-      if(value.isRecord){
+      if(value && value.isRecord){
         if(value.isChildRecord){
           // get the attributes
           attrs = value.get('attributes');
@@ -59,7 +59,7 @@ SC.ChildAttribute = SC.RecordAttribute.extend(
         }
         record.writeAttribute(attrkey,attrs);
       }
-      else if (value) {
+      else {
         record.writeAttribute(attrkey, value);
       }
     }
