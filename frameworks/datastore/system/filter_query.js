@@ -55,7 +55,7 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
     }
   },
 
-  compare: function(rec1,rec2){ // should look at _opts.orderBy, but we don't for the moment...
+  compare: function(record1,record2){ // should look at _opts.orderBy, but we don't for the moment...
     return SC.compare(record1.get('storeKey'),record2.get('storeKey'));
   },
 
