@@ -10,28 +10,28 @@
 sc_require('system/query');
 
 SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
-  
+
   _opts: null,
-  
+
   recordType: null,
-  
+
   isFilterQuery: true, // walk like a duck
-  
-  isQuery: true, 
-  
+
+  isQuery: true,
+
   // this is not correct, needs to be an SC.Set
   expandedRecordTypes: function(){
     return [this.get('recordType')];
   }.property('recordType').cacheable(),
-  
+
   scope: null,
-  
+
   location: 'local', // SC.Local
-  
+
   /**
-    Returns YES if query location is Remote.  This is sometimes more 
+    Returns YES if query location is Remote.  This is sometimes more
     convenient than checking the location.
-    
+
     @property {Boolean}
   */
   isRemote: function() {
@@ -39,26 +39,30 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
   }.property('location').cacheable(),
 
   /**
-    Returns YES if query location is Local.  This is sometimes more 
+    Returns YES if query location is Local.  This is sometimes more
     convenient than checking the location.
-    
+
     @property {Boolean}
   */
   isLocal: function() {
     return this.get('location') === SC.Query.LOCAL;
   }.property('location').cacheable(),
-  
+
   contains: function(rec){
     if(rec.get('recordType') !== this._recType) return false;
     else {
       return this._isMatch(this._opts,rec);
     }
   },
-  
+
+  compare: function(rec1,rec2){ // should look at _opts.orderBy, but we don't for the moment...
+    return SC.compare(record1.get('storeKey'),record2.get('storeKey'));
+  },
+
   // INTERNALS
 
   _methods: {
-    
+
     // this can parse arrays:
     // curopt is always an array, so the loops should do something like indexOf
     // if
@@ -70,8 +74,8 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
       var i,len,j,lenj,ret,o,hasFound,curval;
       if(valIsArray){
         lenj = val.length;
-      }   
-      
+      }
+
       hasFound = forceAND? true: false;
       for(i=0,len=curopt.length;i<len;i+=1){
         o = curopt[i];
@@ -85,7 +89,7 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
           curval = !(o instanceof RegExp)? val.test(o): val === o;
           hasFound = forceAND? hasFound && curval: hasFound || curval;
         }
-        else { 
+        else {
           curval = (o instanceof RegExp)? o.test(val): o === val;
           hasFound = forceAND? hasFound && curval: hasFound || curval;
         }
@@ -98,14 +102,14 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
       }
       return hasFound;
     },
-    
+
     and: function(opts,item,forceAND){
       var ret = true, hasFound;
       var curopt, curpropval, i, len, j, lenj;
       var arrayRegExp = function(v){
         return curopt.test(v);
       };
-      
+
       for(i in opts){
         if(opts.hasOwnProperty(i) && this._reserved.indexOf(i) === -1){
           curopt = opts[i];
@@ -129,7 +133,7 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
               }
               else if(curpropval instanceof RegExp){
                 ret = ret && curpropval.test(curopt);
-              } 
+              }
               else ret = ret && (curopt === curpropval);
             }
           }
@@ -149,7 +153,7 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
         for(i=0,len=opts.length;i<len;i+=1){
           curopt = opts[i];
           if(curopt instanceof Object){
-            ret = ret || this.and(opts[i],item);  
+            ret = ret || this.and(opts[i],item);
           }
           if(ret === true) return ret; // immediately return when true
         }
@@ -162,7 +166,7 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
             ret = ret || this[i](curopt,item); // recursive call deeper in
           }
           else {
-            curpropval = item.get? item.get(i): item[i];            
+            curpropval = item.get? item.get(i): item[i];
             if(opts[i] instanceof RegExp){
               if(curpropval instanceof Array){
                 ret = ret || curpropval.some(arrayRegExp);
@@ -178,33 +182,33 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
               }
               else if(curpropval instanceof RegExp){
                 ret = ret || curpropval.test(curopt);
-              } 
+              }
               else ret = ret || (opts[i] === curpropval);
-            }                        
+            }
           }
         }
         if(ret === true) return true;
       }
       if(!ret) return false;
     },
-    
+
     all: function(opts,item){ // forces everything inside to be connected with AND
       return this.and(opts,item,true);
     },
-    
+
     // only for inner use: will call func for every property inside an embedded OR
     // (for example in range, beginsWith, endsWith etc)
-    _appliedOR: function(opts,item,func){ 
+    _appliedOR: function(opts,item,func){
       var ret = false;
       for(var i in opts){
         if(opts.hasOwnProperty(i)){
           ret = ret || func(i,opts[i],item);
         }
-        if(ret) return ret; 
+        if(ret) return ret;
       }
       return ret;
     },
-    
+
     // only for inner use: will call func for every property inside an embedded AND
     // (for example in range, beginsWith, endsWith etc)
     // function is called with (property,opts,item);
@@ -218,7 +222,7 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
       }
       return ret;
     },
-    
+
     beginsWith: function(opts,item){
       var me = this;
       var isMatch = function(prop,opt,item){
@@ -234,11 +238,11 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
           regexp = new RegExp("^" + opt);
           ret = regexp.test(curpropval);
           return ret;
-        } 
+        }
       };
       return this._appliedAND(opts,item,isMatch);
     },
-    
+
     endsWith: function(opts,item){
       var me = this;
       var isMatch = function(prop,opt,item){
@@ -253,14 +257,14 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
           curpropval = item.get? item.get(prop): item[prop];
           regexp = new RegExp(opt + "$");
           return regexp.test(curpropval);
-        } 
+        }
       };
-      return this._appliedAND(opts,item,isMatch);      
+      return this._appliedAND(opts,item,isMatch);
     },
-    
+
     range: function(opts,item){
       var me = this;
-      
+
       var rangetest = function(prop,opts,item){
         var from, to, incLower = true, incUpper = true;
         var curpropval, fitsFrom, fitsTo;
@@ -301,46 +305,46 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
       };
       return this._appliedAND(opts,item,rangetest);
     },
-    
+
     not: function(opts,item){
       return !this.and(opts,item);
     },
-    
+
     none: function(opts,item){
       return !this.and(opts,item);
     },
 
     _reserved: [ 'orderBy' ]
-    
+
   }, // end _methods
-  
+
   _isMatch: function(opts,item){
     var ret = false;
     var hasRootProps = false;
     if(!item) return false;
     //util.log('_ismatch');
-    //effectively, the root of the object is always an 'and', so just feed it to and, the rest 
+    //effectively, the root of the object is always an 'and', so just feed it to and, the rest
     //will run automatically
     return this._methods.and.call(this._methods,opts,item);
   },
-  
+
   filter: function(ary,opts){
     var ret = [], idx, item, len = ary.length;
     var sortProp, sortOrder;
     if(!opts) return ary;  // don't filter
-    
+
     // check for orderBy
     for(idx=0;idx<len;idx+=1){
       if(this._isMatch(opts,ary[idx])){
         ret.push(ary[idx]);
-      } 
+      }
     }
     if(opts.orderBy){
       sortProp = opts.orderBy.property;
       sortOrder = opts.orderBy.order;
       ret.sort(function(elOne,elTwo){
         var valOne = elOne.get? elOne.get(sortProp) : elOne[sortProp];
-        var valTwo = elTwo.get? elTwo.get(sortProp) : elTwo[sortProp]; 
+        var valTwo = elTwo.get? elTwo.get(sortProp) : elTwo[sortProp];
         var sortASC = sortOrder === 'ASC';
         if(valOne < valTwo){
           if(sortASC) return -1;
@@ -357,52 +361,52 @@ SC.FilterQuery = SC.Object.extend(SC.Copyable, SC.Freezable, {
     }
     return ret;
   },
-  
+
   find: function(ary,opts){
     var ret, idx, item, len = ary.length;
     if(!opts) return ary;
-    
+
     for(idx=0;idx<len;idx+=1){
       if(this._isMatch(opts,ary[idx])) return ary[idx];
     }
     return null;
   },
-  
+
   registerFilterMethod: function(lemma,func){
     this._methods[lemma] = func;
   },
-  
+
   unregisterFilterMethod: function(lemma){
     if(lemma === 'and' || lemma === 'or') return false;
     else {
       this._methods[lemma] = null;
     }
   },
-  
+
   orderStoreKeys: function(storeKeys,query,store){
     // effectively just take all storeKeys, get records, and filter, then get storeKeys
-    
+
     var recs = storeKeys.map(function(sk){
       return store.materializeRecord(sk);
     });
-    
+
     var ret = this.filter(recs,query._opts);
     return ret.getEach('storeKey');
   },
-  
+
   containsRecordTypes: function(types) {
     var rtype = this.get('recordType');
     if (rtype) {
       return !!types.find(function(t) { return SC.kindOf(t, rtype); });
-    
+
     } else if (rtype = this.get('recordTypes')) {
-      return !!rtype.find(function(t) { 
+      return !!rtype.find(function(t) {
         return !!types.find(function(t2) { return SC.kindOf(t2,t); });
       });
-      
+
     } else return YES; // allow anything through
   }
- 
+
 });
 
 SC.FilterQuery.local = function(recType,opts){
@@ -438,5 +442,5 @@ SC.FilterQuery.unregisterFilterMethod = function(lemma){
 
 // wrapper to apply a filter to a random array
 SC.FilterQuery.filter = function(array,opts){
-  
+
 };
