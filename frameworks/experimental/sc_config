@@ -1,6 +1,6 @@
 BT.addFramework(BT.Framework.extend({
   ref: "sproutcore:experimental",
-  path: BT.curDir,
+  path: BT.curPath,
   isWrapperFramework: true
 }));
 

@@ -1,5 +1,5 @@
 BT.addFramework(BT.Framework.extend({
   ref: "sproutcore:animation",
-  path: BT.curDir,
+  path: BT.curPath,
   dependencies: ["sproutcore:foundation"]
 }));

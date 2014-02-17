@@ -1,4 +1,4 @@
 BT.addFramework(BT.Framework.extend({
   ref: "sproutcore:experimental:media",
-  path: BT.curDir
+  path: BT.curPath
 }));
