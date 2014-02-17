@@ -1,0 +1,5 @@
+BT.addFramework(BT.Framework.extend({
+  ref: "sproutcore:experimental:split_view",
+  path: BT.curDir,
+  dependencies: ["sproutcore:foundation"]
+}));

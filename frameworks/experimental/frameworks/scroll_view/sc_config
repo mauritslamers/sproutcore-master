@@ -1,0 +1,5 @@
+BT.addFramework(BT.Framework.extend({
+  ref: "sproutcore:experimental:scrollview",
+  path: BT.curDir,
+  dependencies: ["sproutcore:runtime","sproutcore:foundation","sproutcore:desktop"]
+}));

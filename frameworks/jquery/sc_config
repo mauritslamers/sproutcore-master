@@ -1,0 +1,3 @@
+BT.addFramework(BT.Framework.extend({
+  ref: "sproutcore:jquery"
+}));

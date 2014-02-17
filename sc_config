@@ -1,0 +1,19 @@
+// var sr = SC.AppBuilder.extend({
+//   path: 'apps/statechart_routing'
+// });
+
+//sc_require('sproutcore:desktop');
+
+BT.addFramework(BT.Framework.extend({
+  ref: "sproutcore",
+  path: BT.curDir,
+  isWrapperFramework: true,
+  combinedScripts: true,
+  combinedStylesheets: true,
+  dependencies: ["sproutcore:desktop"]
+}));
+
+// sc_require('apps/statechart_routing');
+// sc_require('apps/test_controls');
+// sc_require('apps/tests');
+// sc_require("apps/welcome");

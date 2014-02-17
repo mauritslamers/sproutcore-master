@@ -1,0 +1,5 @@
+BT.addFramework(BT.Framework.extend({
+  ref: "sproutcore:desktop",
+  path: BT.curDir,
+  dependencies: ["sproutcore:foundation"]
+}));

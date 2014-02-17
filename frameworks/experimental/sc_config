@@ -1,0 +1,8 @@
+BT.addFramework(BT.Framework.extend({
+  ref: "sproutcore:experimental",
+  path: BT.curDir,
+  isWrapperFramework: true
+}));
+
+sc_require('apps/greenhouse');
+sc_require('apps/media_examples');
