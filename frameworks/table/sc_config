@@ -1,6 +1,6 @@
 BT.addFramework(BT.Framework.extend({
   ref: "sproutcore:table",
-  path: BT.curPath
+  path: __dirname
 }));
 
 // no dependencies?

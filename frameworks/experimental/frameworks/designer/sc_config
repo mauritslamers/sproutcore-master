@@ -1,5 +1,5 @@
 BT.addFramework(BT.Framework.extend({
   ref: "sproutcore:experimental:designer",
-  path: BT.curPath,
+  path: __dirname,
   dependencies: ["sproutcore:runtime","sproutcore:foundation","sproutcore:desktop"]
 }));

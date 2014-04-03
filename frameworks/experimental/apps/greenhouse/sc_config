@@ -1,5 +1,6 @@
 BT.addApp(BT.AppBuilder.create({
   name: "greenhouse",
+  path: __dirname,
   frameworks: ["sproutcore","sproutcore:experimental:designer", "sproutcore:statechart"]
   theme: "ace",
   cssTheme: "ace.greenhouse"

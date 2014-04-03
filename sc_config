@@ -2,14 +2,23 @@
 //   path: 'apps/statechart_routing'
 // });
 
-//sc_require('sproutcore:desktop');
+
 
 BT.addFramework(BT.Framework.extend({
   ref: "sproutcore",
-  path: BT.curDir,
+  //path: BT.curDir,
+  path: __dirname,
   isWrapperFramework: true,
-  combinedScripts: true,
-  combinedStylesheets: true,
+  all: {
+    debug: {
+      combinedScripts: true,
+      combinedStylesheets: true,
+    },
+    production: {
+      combinedScripts: true,
+      combinedStylesheets: true,
+    }
+  },
   dependencies: ["sproutcore:desktop"]
 }));
 

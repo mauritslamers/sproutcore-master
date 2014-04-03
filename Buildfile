@@ -11,11 +11,11 @@
 
 config :all,
   :layout         => 'sproutcore:lib/index.rhtml',
-  :test_layout    => 'sproutcore:lib/index.rhtml',
+  :test_layout    => 'sproutcore,:lib/index.rhtml',
   :test_required  => ['sproutcore/testing'],
   :debug_required => ['sproutcore/debug', 'sproutcore/testing']
 
-# in debug mode, combine the JS for SC by default.  This will improve perf
+# in debug mode, combine the JS f n  or SC by default.  This will improve perf
 # while working with apps.  If you are hacking SC itself, you can turn this
 # off in your project buildfile by referencing sproutcore specifically
 mode :debug do
