@@ -19,7 +19,7 @@ BT.addFramework(BT.Framework.extend({
       combinedStylesheets: true,
     }
   },
-  dependencies: ["sproutcore:desktop"]
+  dependencies: ["sproutcore:desktop","sproutcore:datastore","sproutcore:statechart"]
 }));
 
 // sc_require('apps/statechart_routing');
