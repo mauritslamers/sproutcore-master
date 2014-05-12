@@ -10,15 +10,19 @@ sc_require('panes/panel');
 /** @class
   Displays a non-modal, default positioned, drag&drop-able palette pane.
 
-  The default way to use the palette pane is to simply add it to your page like this:
+  The simplest way to use the palette pane is to define it in an SC.Page like this:
 
-      SC.PalettePane.create({
-        layout: { width: 400, height: 200, right: 0, top: 0 },
-        contentView: SC.View.extend({
+        myPalettePane: SC.PalettePane.create({
+          layout: { width: 400, height: 200, right: 0, top: 0 },
+          contentView: SC.View.extend({
+          })
         })
-      }).append();
 
-  This will cause your palette pane to display.
+  Then get it from your page and append like this:
+
+        MyApp.myPage.get('myPalettePane').append();
+
+  This will cause your palette pane to instantiate lazily and display.
 
   Palette pane is a simple way to provide non-modal messaging that won't
   blocks the user's interaction with your application.  Palette panes are
@@ -26,9 +30,10 @@ sc_require('panes/panel');
   They provide a better user experience than modal panel.
 
   @extends SC.PanelPane
+  @extends SC.DraggablePaneSupport
   @since SproutCore 1.0
 */
-SC.PalettePane = SC.PanelPane.extend(
+SC.PalettePane = SC.PanelPane.extend(SC.DraggablePaneSupport,
 /** @scope SC.PalettePane.prototype */ {
 
   /**
@@ -50,47 +55,6 @@ SC.PalettePane = SC.PanelPane.extend(
     @type SC.View
     @default SC.ModalPane
   */
-  modalPane: SC.ModalPane,
-  
-  /**
-    @type Boolean
-    @default NO
-  */
-  isAnchored: NO,
 
-  /** @private */
-  _mouseOffsetX: null,
-
-  /** @private */
-  _mouseOffsetY: null,
-
-  /** @private
-    Drag & drop palette to new position.
-  */
-  mouseDown: function(evt) {
-    var f=this.get('frame');
-    this._mouseOffsetX = f ? (f.x - evt.pageX) : 0;
-    this._mouseOffsetY = f ? (f.y - evt.pageY) : 0;
-    return YES;
-  },
-
-  /** @private */
-  mouseDragged: function(evt) {
-    if(!this.isAnchored) {
-      this.set('layout', { width: this.layout.width, height: this.layout.height, left: this._mouseOffsetX + evt.pageX, top: this._mouseOffsetY + evt.pageY });
-      this.updateLayout();
-    }
-    return YES;
-  },
-
-  /** @private */
-  touchStart: function(evt){
-    return this.mouseDown(evt);
-  },
-
-  /** @private */
-  touchesDragged: function(evt){
-    return this.mouseDragged(evt);
-  }
-
+  modalPane: SC.ModalPane
 });

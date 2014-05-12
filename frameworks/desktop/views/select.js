@@ -553,8 +553,9 @@ SC.SelectView = SC.ButtonView.extend(
 
       idx += 1;
 
-      this.set('_itemList', itemList);
     }, this );
+
+    this.set('_itemList', itemList);
 
     var value = this.get('value');
     if (SC.none(value)) {
@@ -872,18 +873,20 @@ SC.SelectView = SC.ButtonView.extend(
 
   /**
     @private
-    Pressing the Up or Down arrow key should display the menu pane
+    Pressing the Up or Down arrow key should display the menu pane. Pressing escape should
+    resign first responder.
   */
-  interpretKeyEvents: function (event) {
-    if (event) {
-      if ((event.keyCode === 38 || event.keyCode === 40)) {
-        this._action();
-      }
-      else if (event.keyCode === 27) {
-        this.resignFirstResponder();
-      }
-    }
-    return sc_super();
+  moveUp: function(evt) {
+    this._action();
+    return YES;
+  },
+  /** @private */
+  moveDown: function(evt) {
+    this._action();
+    return YES;
+  },
+  cancel: function(evt) {
+    this.resignFirstResponder();
   },
 
   /** @private

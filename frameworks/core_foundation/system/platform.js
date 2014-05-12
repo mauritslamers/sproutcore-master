@@ -117,7 +117,8 @@ SC.platform = SC.Object.create({
 
     return ret;
   }(['autocomplete', 'readonly', 'list', 'size', 'required', 'multiple', 'maxlength',
-      'pattern', 'min', 'max', 'step', 'placeholder']),
+        'pattern', 'min', 'max', 'step', 'placeholder',
+        'selectionStart', 'selectionEnd', 'selectionDirection']),
 
   /**
     YES if the application is currently running as a standalone application.
@@ -394,6 +395,34 @@ SC.platform = SC.Object.create({
   */
   supportsCanvas: function () {
     return !!document.createElement('canvas').getContext;
+  }(),
+
+  /**
+    Whether the browser supports the XHR2 ProgressEvent specification. This
+    reliably implies support for XMLHttpRequest 'loadstart' and 'progress'
+    events, as well as the terminal 'load', 'error' and 'abort' events. Support
+    for 'loadend', which fires no matter how the request terminats, is a bit
+    spottier and should be verified separately using `supportsXHR2LoadEndEvent`.
+
+    @type Boolean
+  */
+  supportsXHR2ProgressEvent: ('ProgressEvent' in window),
+
+  /**
+    Whether the browser supports the XHR2 FormData specification.
+
+    @type Boolean
+  */
+  supportsXHR2FormData: ('FormData' in window),
+
+  /**
+    Whether the browser supports the XHR2 ProgressEvent's loadend event. If not
+    supported, you should handle 'load', 'error' and 'abort' events instead.
+
+    @type Boolean
+   */
+  supportsXHR2LoadEndEvent: function() {
+    return (new XMLHttpRequest).onloadend === null;
   }(),
 
   /**

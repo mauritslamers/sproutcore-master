@@ -444,22 +444,17 @@ SC.Drag = SC.Object.extend(
       }
     }
 
-    if (this.get('sourceIsDraggable')) {
-      // destroy the ghost view
-      this._destroyGhostView();
-
-      if (this.get('ghost')) {
-        // Show the dragView if it was hidden.
-        if (this._dragViewWasVisible) this._getDragView().set('isVisible', YES);
-        this._dragViewWasVisible = null;
-      }
+    // Trigger a slide-back if triggered and if the drag was unsuccessful.
+    if (this.get('sourceIsDraggable') && this.get('slideBack') && op === SC.DRAG_NONE) {
+      this._slideGhostViewBack();
     }
-
+    // Otherwise, wrap up the drag right now.
+    else {
+      this._endDrag();
+    }
     // notify the source that everything has completed
     var source = this.source;
     if (source && source.dragDidEnd) source.dragDidEnd(this, loc, op);
-    
-    this._cleanUpDrag();
   },
 
   // ..........................................
@@ -604,15 +599,32 @@ SC.Drag = SC.Object.extend(
 
       didCreateLayer: function () {
         if (dragView) {
-          var layer = dragView.get('layer');
-          if (layer) {
-            layer = layer.cloneNode(true);
+          var dragLayer = dragView.get('layer');
+          if (dragLayer) {
+            var layer = dragLayer.cloneNode(true);
+
+            // Canvas elements need manual copying.
+            var dragCanvasses = dragView.$().find('canvas');
+            if (dragCanvasses.length) {
+              var ghostCanvasses = $(layer).find('canvas'),
+                  len = dragCanvasses.length,
+                  i, dragCanvas, ghostCanvas;
+              for (i = 0; i < len; i++) {
+                dragCanvas = dragCanvasses[i];
+                ghostCanvas = ghostCanvasses[i];
+                ghostCanvas.width = dragCanvas.width;
+                ghostCanvas.height = dragCanvas.height;
+                ghostCanvas.getContext('2d').drawImage(dragCanvas, 0, 0);
+              }
+            }
 
             // Make sure the layer we put in the ghostView wrapper is not displaced.
             layer.style.top = "0px";
             layer.style.left = "0px";
             layer.style.bottom = "0px";
             layer.style.right = "0px";
+
+            // Attach the cloned layer.
             this.get('layer').appendChild(layer);
           }
         }
@@ -667,6 +679,27 @@ SC.Drag = SC.Object.extend(
     }
   },
 
+  /** @private Called instead of _destroyGhostView if slideBack is YES. */
+  _slideGhostViewBack: function() {
+    if (this.ghostView) {
+      var dragView = this._getDragView(),
+          frame = dragView.get('borderFrame'),
+          dragParentView = dragView.get('parentView'),
+          globalOrigin = dragParentView ? dragParentView.convertFrameToView(frame, null) : dragView.get('frame'),
+          slidebackLayout;
+
+      // Create a fixed layout for the ghost view.
+      slidebackLayout = { top: globalOrigin.y, left: globalOrigin.x };
+
+      // Animate the ghost view back to its original position; destroy after.
+      this.ghostView.animate(slidebackLayout, 0.5, this, function() { this.invokeNext(this._endDrag) });
+
+    }
+    else {
+      this._endDrag();
+    }
+  },
+
   /** @private */
   _destroyGhostView: function () {
     if (this.ghostView) {
@@ -674,6 +707,20 @@ SC.Drag = SC.Object.extend(
       this.ghostView = null; // this will allow the GC to collect it.
       this._ghostViewHidden = NO;
     }
+  },
+
+  /** @private */
+  _endDrag: function() {
+    if (this.get('sourceIsDraggable')) {
+      this._destroyGhostView();
+      if (this.get('ghost')) {
+        // Show the dragView if it was hidden.
+        if (this._dragViewWasVisible) this._getDragView().set('isVisible', YES);
+        this._dragViewWasVisible = null;
+      }
+    }
+
+    this._cleanUpDrag();
   },
 
   /** @private */

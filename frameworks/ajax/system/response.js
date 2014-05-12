@@ -517,7 +517,7 @@ SC.XHRResponse = SC.Response.extend(
     async = !!request.get('isAsynchronous');
 
     if (async) {
-      if (window.XMLHttpRequestProgressEvent) {
+      if (SC.platform.get('supportsXHR2ProgressEvent')) {
         // XMLHttpRequest Level 2
 
         // Add progress event listeners that were specified on the request.
@@ -548,7 +548,13 @@ SC.XHRResponse = SC.Response.extend(
           }
         }
 
-        SC.Event.add(rawRequest, 'loadend', this, this.finishRequest);
+        if (SC.platform.get('supportsXHR2LoadEndEvent')) {
+          SC.Event.add(rawRequest, 'loadend', this, this.finishRequest);
+        } else {
+          SC.Event.add(rawRequest, 'load', this, this.finishRequest);
+          SC.Event.add(rawRequest, 'error', this, this.finishRequest);
+          SC.Event.add(rawRequest, 'abort', this, this.finishRequest);
+        }
       } else if (window.XMLHttpRequest && rawRequest.addEventListener) {
         // XMLHttpRequest Level 1 + support for addEventListener (IE prior to version 9.0 lacks support for addEventListener)
         SC.Event.add(rawRequest, 'readystatechange', this, this.finishRequest);
@@ -653,10 +659,16 @@ SC.XHRResponse = SC.Response.extend(
       }, this);
 
       // Avoid memory leaks
-      if (window.XMLHttpRequestProgressEvent) {
+      if (SC.platform.get('supportsXHR2ProgressEvent')) {
         // XMLHttpRequest Level 2
 
-        SC.Event.remove(rawRequest, 'loadend', this, this.finishRequest);
+        if (SC.platform.get('supportsXHR2LoadEndEvent')) {
+          SC.Event.remove(rawRequest, 'loadend', this, this.finishRequest);
+        } else {
+          SC.Event.remove(rawRequest, 'load', this, this.finishRequest);
+          SC.Event.remove(rawRequest, 'error', this, this.finishRequest);
+          SC.Event.remove(rawRequest, 'abort', this, this.finishRequest);
+        }
 
         request = this.get('request');
         listeners = request.get("listeners");

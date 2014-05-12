@@ -34,6 +34,7 @@ SC.setupBodyClassNames = function() {
   // in practical usage.
   ieVersion = parseInt(SC.browser.version, 10);
   if (SC.browser.isIE) {
+    classNames.push('msie'); // Used by several framework CSS declarations, including the one to address issue #971.
     if (ieVersion === 7) {
       classNames.push('ie7');
     }
@@ -42,6 +43,9 @@ SC.setupBodyClassNames = function() {
     }
     else if (ieVersion === 9) {
       classNames.push('ie9');
+    }
+    else if  (ieVersion === 10) {
+      classNames.push('ie10');
     }
   }
 

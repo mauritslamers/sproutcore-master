@@ -4,6 +4,7 @@
 //            portions copyright @2011 Apple Inc.
 // License:   Licensed under MIT license (see license.js)
 // ==========================================================================
+/*global ok, test, equals, module */
 
 var view, del, content ;
 
@@ -39,6 +40,7 @@ module("SC.CollectionView.itemViewForContentIndex", {
     };
 
     // NOTE: delegate methods above are added here.
+    SC.run(function () {
     view = SC.CollectionView.create(del, {
       content: content,
 
@@ -50,9 +52,9 @@ module("SC.CollectionView.itemViewForContentIndex", {
 
       groupExampleView: SC.View.extend(), // custom for testing
 
-      exampleView: SC.View.extend({
-        isReusable: false
-      }), // custom for testing
+        exampleView: SC.View.extend({
+          isReusable: false
+        }), // custom for testing
 
       testAsGroup: NO,
 
@@ -65,10 +67,12 @@ module("SC.CollectionView.itemViewForContentIndex", {
       },
 
       fixtureNowShowing: SC.IndexSet.create(0,3),
+
       computeNowShowing: function() {
         return this.fixtureNowShowing;
       }
 
+    });
     });
 
     // add in delegate mixin
@@ -103,6 +107,29 @@ test("creating basic item view", function() {
   shouldMatchFixture(itemView, view.fixture);
 });
 
+test("isLast property", function () {
+  view.isVisibleInWindow = true;
+
+  var itemView = view.itemViewForContentIndex(1);
+  equals(itemView.get('isLast'), false, 'itemView.isLast should be false');
+
+  itemView = view.itemViewForContentIndex(2);
+  equals(itemView.get('isLast'), true, 'itemView.isLast should be true');
+
+  SC.run(function () {
+    view.beginPropertyChanges();
+    view.get('content').pushObject(SC.Object.create({ title: 'd' }));
+    view.set('fixtureNowShowing', SC.IndexSet.create(0, 4));
+    view.endPropertyChanges();
+  });
+
+  itemView = view.itemViewForContentIndex(3);
+  equals(itemView.get('isLast'), true, 'itemView.isLast should be true');
+
+  itemView = view.itemViewForContentIndex(2);
+  equals(itemView.get('isLast'), false, 'itemView.isLast for previous last item should be false');
+});
+
 test("returning item from cache", function() {
 
   var itemView1 = view.itemViewForContentIndex(1);
@@ -118,6 +145,23 @@ test("returning item from cache", function() {
   var itemView4 = view.itemViewForContentIndex(1, NO);
   equals(itemView4, itemView3, 'itemViewForContentIndex(1) [no reload] should return newly cached item after recache');
 
+});
+
+// Tests support for the addition of designModes to SC.Pane and SC.View.  Since
+// SC.CollectionView doesn't use child views and thus doesn't call
+// SC.View:insertBefore, it needs to pass the designMode down to its item views
+// itself.
+test("set designMode on item views", function() {
+  var itemView;
+
+  // Initial designMode before creating the item view.
+  view.set('designMode', 'small');
+  itemView = view.itemViewForContentIndex(1);
+  equals(itemView.get('designMode'), 'small', "itemView.designMode should be set to match the current value of the collection");
+
+  // Changes to designMode after creating the item view.
+  view.updateDesignMode('small', 'large');
+  equals(itemView.get('designMode'), 'large', "itemView.designMode should be set to match the current value of the collection");
 });
 
 // ..........................................................
@@ -136,9 +180,10 @@ test("contentExampleViewKey is set and content has property", function() {
 });
 
 test("contentExampleViewKey is set and content is null", function() {
-  var CustomView = SC.View.extend();
   view.set('contentExampleViewKey', 'foo');
+  SC.run(function () {
   content.replace(1,1,[null]);
+  });
 
   var itemView = view.itemViewForContentIndex(1);
   ok(itemView, 'should return item view');
@@ -147,7 +192,6 @@ test("contentExampleViewKey is set and content is null", function() {
 });
 
 test("contentExampleViewKey is set and content property is empty", function() {
-  var CustomView = SC.View.extend();
   view.set('contentExampleViewKey', 'foo');
 
   var itemView = view.itemViewForContentIndex(1);
@@ -185,9 +229,10 @@ test("contentGroupExampleViewKey is set and content has property", function() {
 test("contentGroupExampleViewKey is set and content is null", function() {
   view.testAsGroup = YES ;
 
-  var CustomView = SC.View.extend();
   view.set('contentGroupExampleViewKey', 'foo');
+  SC.run(function () {
   content.replace(1,1,[null]);
+  });
 
   var itemView = view.itemViewForContentIndex(1);
   ok(itemView, 'should return item view');
@@ -199,7 +244,6 @@ test("contentGroupExampleViewKey is set and content is null", function() {
 test("contentGroupExampleViewKey is set and content property is empty", function() {
   view.testAsGroup = YES ;
 
-  var CustomView = SC.View.extend();
   view.set('contentGroupExampleViewKey', 'foo');
 
   var itemView = view.itemViewForContentIndex(1);
@@ -217,7 +261,10 @@ test("_contentGroupIndexes's cache should be properly invalidated", function() {
 
   ok(view.get('_contentGroupIndexes').isEqual(SC.IndexSet.create(0, 3)), "contentGroupIndexes should have correct initial value");
 
+  SC.run(function () {
   view.get('content').removeAt(2, 1);
+  });
+
   ok(view.get('_contentGroupIndexes').isEqual(SC.IndexSet.create(0, 2)), "contentGroupIndexes should have updated value after deletion");
 });
 
@@ -261,6 +308,24 @@ test("prefers delegate over content if both implement mixin", function() {
 // ..........................................................
 // SPECIAL CASES
 //
+
+
+test("attempt to retrieve invalid indexes returns null", function () {
+  var itemView;
+
+  itemView = view.itemViewForContentIndex(null);
+  equals(itemView, null, 'Using index null should not return an item view');
+
+  itemView = view.itemViewForContentIndex(undefined);
+  equals(itemView, null, 'Using index undefined should not return an item view');
+
+  itemView = view.itemViewForContentIndex(-1);
+  equals(itemView, null, 'Using index -1 should not return an item view');
+
+  itemView = view.itemViewForContentIndex(view.get('length'));
+  equals(itemView, null, 'Using index %@ (length of content is %@) should not return an item view'.fmt(view.get('length'), view.get('length')));
+});
+
 
 test("after making an item visible then invisible again", function() {
 
@@ -351,4 +416,18 @@ test("canReorderContent sets isReorderable on the item views so they can visuall
   view.set('isEditable', false);
   itemView = view.itemViewForContentIndex(1);
   equals(itemView.get('isReorderable'), false, 'itemView has isReorderable');
+});
+
+test("itemViewForContentObject", function() {
+  equals(view.itemViewForContentObject(content[0]).getPath('content.title'), 'a', "itemViewForContentObject returns 0th itemView for the 0th content object");
+
+  equals(view.itemViewForContentObject(SC.Object.create()), null, "itemViewForContentObject returns null for a object that is not in in its content");
+
+  var emptyContentCollection;
+  SC.run(function() {
+    emptyContentCollection = SC.CollectionView.create();
+  });
+
+  equals(emptyContentCollection.itemViewForContentObject(content[0]), null, "itemViewForContentObject returns null (without erroring) when it has no content.");
+
 });

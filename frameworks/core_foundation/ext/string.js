@@ -39,6 +39,13 @@ SC.supplement(String.prototype,
   },
 
   /**
+    @see SC.String.escapeCssIdForSelector
+  */
+  escapeCssIdForSelector: function () {
+    return SC.String.escapeCssIdForSelector(this);
+  },
+
+  /**
     @see SC.String.loc
   */
   loc: function() {

@@ -28,6 +28,28 @@ module("SC.Request", {
 
 });
 
+test("PRELIM: Verify basic functionality in testing environment.", function() {
+  if (SC.platform.get('supportsXHR2ProgressEvent')) {
+    var xhr = new XMLHttpRequest;
+    xhr.addEventListener('load', function() {
+      ok(true, 'Success: xhr.addEventListener for load event.');
+      nextTest();
+    });
+    xhr.open("get", url);
+    xhr.send();
+
+    window.stop(test_timeout);
+
+    function nextTest() {
+      request.notify('load', this, function() {
+        ok(true, 'Success: SC.Request#notify for load event.');
+        window.start();
+      });
+      request.send();
+    }
+  }
+});
+
 test("Basic Requirements", function() {
   ok(SC.Request, "SC.Request is defined");
   ok("" !== url, "url variable is not empty");
@@ -368,7 +390,7 @@ test("Test Multiple listeners per single status response", function() {
   var response;
 
   expect(8);
-  
+
   // sanity check
   equals(SC.Request.manager.inflight.length,0,"there should be no inflight requests");
 
@@ -381,7 +403,7 @@ test("Test Multiple listeners per single status response", function() {
     numResponses++;
     ok(true, "Received a response on second listener");
   });
-  
+
   setTimeout(function() {
     equals(SC.Request.manager.inflight.length,0,"there should be no inflight requests after the timeout");
     equals(numResponses, 2, "got two notifications");
@@ -405,7 +427,7 @@ test("Test Multiple listeners per single status response", function() {
 */
 test("Multiple arguments passed to notify()", function() {
   var response;
-  
+
   // sanity check
   equals(SC.Request.manager.inflight.length,0,"there should be no inflight requests");
 
@@ -459,12 +481,13 @@ test("Test event listeners on successful request.", function() {
   request.notify(200, this, function(response) {
     status = response.status;
 
-    if (window.XMLHttpRequestProgressEvent) {
+    if (SC.platform.get('supportsXHR2ProgressEvent')) {
       ok(loadstart, "Received a loadstart event.");
       ok(progress, "Received a progress event.");
       ok(load, "Received a load event.");
-      ok(loadend, "Received a loadend event.");
+      if (SC.platform.get('supportsXHR2LoadEndEvent')) ok(loadend, "Received a loadend event.");
     }
+
     ok(!abort, "Did not receive an abort event.");
     ok(!error, "Did not receive an error event.");
     ok(!timeout, "Did not receive a timeout event.");
@@ -478,14 +501,13 @@ test("Test event listeners on successful request.", function() {
   response = request.send();
 });
 
-if (window.XMLHttpRequestProgressEvent) {
+if (SC.platform.get('supportsXHR2ProgressEvent')) {
   test("Test event listeners on aborted request.", function() {
     var abort = false,
       error = false,
       load = false,
-      loadend = false,
       loadstart = false,
-      progress = false,
+      loadend = false,
       response,
       status,
       timeout = false;
@@ -505,14 +527,18 @@ if (window.XMLHttpRequestProgressEvent) {
       response.cancel();
     });
 
-    request.notify("loadend", this, function(evt) {
+    request.notify(SC.platform.get('supportsXHR2LoadEndEvent') ? 'loadend' : 'abort', this, function(evt) {
       loadend = true;
 
       ok(loadstart, "Received a loadstart event.");
       ok(progress, "Received a progress event.");
       ok(abort, "Received an abort event.");
       ok(!load, "Did not receive a load event.");
-      ok(loadend, "Received a loadend event.");
+      if (SC.platform.get('supportsXHR2LoadEndEvent')) {
+        ok(loadend, "Received a loadend event.");
+      } else {
+        ok(loadend, "loadend event not supported. Received terminal abort event.");
+      }
       ok(!error, "Did not receive an error event.");
       ok(!timeout, "Did not receive a timeout event.");
       equals(status, undefined, "Did not receive a status notification.");
@@ -560,11 +586,11 @@ test("Test upload event listeners on successful request.", function() {
   request.notify(200, this, function(response) {
     status = response.status;
 
-    if (window.XMLHttpRequestProgressEvent) {
+    if (SC.platform.get('supportsXHR2ProgressEvent')) {
       ok(loadstart, "Received a loadstart event.");
       ok(progress, "Received a progress event.");
       ok(load, "Received a load event.");
-      ok(loadend, "Received a loadend event.");
+      if (SC.platform.get('supportsXHR2LoadEndEvent')) ok(loadend, "Received a loadend event.");
     }
     ok(!abort, "Did not receive an abort event.");
     ok(!error, "Did not receive an error event.");
@@ -575,8 +601,9 @@ test("Test upload event listeners on successful request.", function() {
   });
 
   // Make a significant body object.
+  // It looks that Firefox is not sending the progress event if the request is too small
   var i;
-  for (i = 2000; i >= 0; i--) {
+  for (i = 200000; i >= 0; i--) {
     body['k' + i] = 'v' + i;
   }
 
@@ -590,30 +617,118 @@ test("Test manager.cancelAll.", function() {
   var manager = SC.Request.manager, max = manager.get('maxRequests');
   // Make sure we're clear.
   SC.Request.manager.cancelAll();
-  
+
   // Get a copy of the previous arrays, since they're overwritten on clear.
   var inflight = manager.get('inflight');
   var pending = manager.get('pending');
-  
+
   // Generate > 6 requests
   for( var i = 0; i < max * 2; i++) {
     SC.Request.getUrl('/').send();
   }
-  
+
   equals(inflight.get('length'), max, "There must be %@ inflight requests".fmt(max));
   equals(pending.get('length'), max, "There must be %@ pending requests".fmt(max));
-  
+
   SC.Request.manager.cancelAll();
 
   // Demonstrates memory pointer matches
   equals(inflight, manager.getPath('inflight'), "Arrays must be identical");
   equals(pending, manager.getPath('pending'), "Arrays must be identical");
-  
+
   // Demonstrates that all previous requests have been cleared.
   equals(inflight.get('length'), 0, "There must be 0 inflight requests in the old array".fmt(max));
   equals(pending.get('length'), 0, "There must be 0 pending requests in the old array".fmt(max));
-  
+
   // Demonstrates that the manager doesn't know about any requests.
   equals(manager.getPath('inflight.length'), 0, "There must be 0 inflight requests".fmt(max));
   equals(manager.getPath('pending.length'), 0, "There must be 0 pending requests".fmt(max));
+});
+
+test("Test responses moving between pending and inflight states", function() {
+  var prevMaxRequests = SC.Request.manager.get('maxRequests'),
+      request2 = SC.Request.getUrl(url),
+      response,
+      response2;
+
+  // This gives us precise control over when our requests fire.
+  SC.Request.manager.set('maxRequests', 0);
+
+  request.notify('loadstart', function (evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is no longer pending.');
+    ok(SC.Request.manager.isInFlight(response), 'First request is now inflight.');
+    ok(SC.Request.manager.isPending(response2), 'Second request is still pending.');
+    ok(!SC.Request.manager.isInFlight(response2), 'Second request is not inflight.');
+  });
+
+  request.notify('progress', this, function(evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(SC.Request.manager.isInFlight(response), 'First request is still inflight.');
+    ok(SC.Request.manager.isPending(response2), 'Second request is still pending.');
+    ok(!SC.Request.manager.isInFlight(response2), 'Second request is not inflight.');
+  });
+
+  request.notify('loadend', this, function (evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(SC.Request.manager.isInFlight(response), 'First request is still inflight.');
+    ok(SC.Request.manager.isPending(response2), 'Second request is still pending.');
+    ok(!SC.Request.manager.isInFlight(response2), 'Second request is not inflight.');
+  });
+
+  request.notify(this, function (evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(SC.Request.manager.isInFlight(response), 'First request is still inflight.');
+    ok(SC.Request.manager.isPending(response2), 'Second request is still pending.');
+    ok(!SC.Request.manager.isInFlight(response2), 'Second request is not inflight.');
+  });
+
+  request2.notify('loadstart', this, function(evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(!SC.Request.manager.isInFlight(response), 'First request is no longer inflight.');
+    ok(!SC.Request.manager.isPending(response2), 'Second request is no longer pending.');
+    ok(SC.Request.manager.isInFlight(response2), 'Second request is now inflight.');
+  });
+
+  request2.notify('progress', this, function(evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(!SC.Request.manager.isInFlight(response), 'First request is not inflight.');
+    ok(!SC.Request.manager.isPending(response2), 'Second request is not pending.');
+    ok(SC.Request.manager.isInFlight(response2), 'Second request is still inflight.');
+  });
+
+  request2.notify('loadend', this, function(evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(!SC.Request.manager.isInFlight(response), 'First request is not inflight.');
+    ok(!SC.Request.manager.isPending(response2), 'Second request is not pending.');
+    ok(SC.Request.manager.isInFlight(response2), 'Second request is still inflight.');
+  });
+
+  request2.notify(this, function (evt) {
+    ok(!SC.Request.manager.isPending(response), 'First request is not pending.');
+    ok(!SC.Request.manager.isInFlight(response), 'First request is not inflight.');
+    ok(!SC.Request.manager.isPending(response2), 'Second request is not pending.');
+    ok(SC.Request.manager.isInFlight(response2), 'Second request is still inflight.');
+
+    SC.Request.manager.set('maxRequests', prevMaxRequests);
+    window.start();
+  });
+
+  response = request.send();
+  response2 = request2.send();
+
+  ok(SC.Request.manager.isPending(response), 'First request is pending.');
+  ok(!SC.Request.manager.isInFlight(response), 'First request is not inflight.');
+  ok(SC.Request.manager.isPending(response2), 'Second request is pending.');
+  ok(!SC.Request.manager.isInFlight(response2), 'Second request is not inflight.');
+
+  SC.Request.manager.set('maxRequests', 1);
+  SC.Request.manager.fireRequestIfNeeded();
+
+  ok(!SC.Request.manager.isPending(response), 'First request is no longer pending.');
+  ok(SC.Request.manager.isInFlight(response), 'First request is inflight.');
+  ok(SC.Request.manager.isPending(response2), 'Second request is still pending.');
+  ok(!SC.Request.manager.isInFlight(response2), 'Second request is not inflight.');
+
+
+  stop();
 });

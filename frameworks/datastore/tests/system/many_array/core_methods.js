@@ -3,7 +3,7 @@
 // Copyright: ©2006-2011 Apple Inc. and contributors.
 // License:   Licensed under MIT license (see license.js)
 // ==========================================================================
-/*globals module ok equals same test MyApp */
+/*globals module, ok, equals, same, test, MyApp */
 
 // test core array-mapping methods for ManyArray
 var store, storeKey, storeId, rec, storeIds, recs, arrayRec;
@@ -243,4 +243,43 @@ test("Test that _findInsertionLocation returns the correct location.", function 
   location = recs._findInsertionLocation(newRec, 0, recs.get('length') - 1, sortByFirstName);
 
   equals(location, 4, "The insertion location should be");
+});
+
+// ..........................................................
+// New records
+//
+
+test("Test new record support. INCOMPLETE.", function () {
+  var newRec = MyApp.store.createRecord(MyApp.Foo, { firstName: "Adam", lastName: "Doe", age: 15 }),
+    holder = MyApp.store.find(MyApp.Foo, 50);
+
+  recs.set('supportNewRecords', false);
+  try {
+    recs.pushObject(newRec);
+    ok(false, "Should not be able to push a record without an id without supportNewRecords.");
+  } catch (ex) {
+    ok(true, "Should not be able to push a record without an id without supportNewRecords.");
+  }
+
+  recs.set('supportNewRecords', true);
+  try {
+    recs.pushObject(newRec);
+    ok(true, "Should be able to push a record without an id normally.");
+  } catch (ex) {
+    ok(false, "Should be able to push a record without an id normally.");
+  }
+
+  equals(newRec.get('id'), undefined, "The transient record should still have an undefined id.");
+  equals(recs.objectAt(4), newRec, "The transient record should be accessible in the many array.");
+  //equals(holder.get('status'), SC.Record.READY_CLEAN, "The record should not be dirtied when the transient record is added.");
+  warn("The record should not be dirtied when the transient record is added. Not yet implemented.");
+
+  SC.run(function () {
+    newRec.set('id', 200);
+  });
+
+  equals(newRec.get('id'), 200, "The post-transient record should have an id of 200.");
+  //equals(holder.get('status'), SC.Record.READY_DIRTY, "The record should be dirtied when the relationship is actually updated.");
+  warn("The record should be dirtied when the relationship is actually updated. Not yet implemented.");
+
 });

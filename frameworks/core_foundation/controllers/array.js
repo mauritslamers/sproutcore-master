@@ -441,6 +441,21 @@ SC.ArrayController = SC.Controller.extend(SC.Array, SC.SelectionSupport,
 
   _scac_arrayContentDidChange: function (start, removed, added) {
     this._scac_cached = NO;
+
+    // If the controller is sorted (via an orderBy) and new items are added, we need
+    // to be sure to notify range observers based on the sorted order, not the raw
+    // order. (This simply notifies a change for sorted arrays' full ranges; it *may* be
+    // worth it to calculate the actual change in sorted order and only notify the
+    // affected range, but this calculation may be expensive.)
+    // Note that removing items (added === 0) will not affect the order of the remaining
+    // elements.
+    if ((added > 0) && this.get('orderBy')) {
+      start = 0;
+      removed = 0;
+      added = this.get('length');
+    }
+
+    // Notify range and '[]' observers.
     this.arrayContentDidChange(start, removed, added);
 
     // If the start & length are provided, we can also indicate if the firstObject
@@ -554,6 +569,7 @@ SC.ArrayController = SC.Controller.extend(SC.Array, SC.SelectionSupport,
     // If this is an unordered enumerable, we have no way
     // of knowing which indices changed. Instead, we just
     // invalidate the whole array.
+    this.arrayContentWillChange(0, oldlen, newlen);
     this.arrayContentDidChange(0, oldlen, newlen);
     this.enumerableContentDidChange(0, oldlen - 1);
     this.endPropertyChanges();

@@ -54,10 +54,12 @@ SC.ImageView = SC.View.extend(SC.Control, SC.InnerFrame,
 
   displayProperties: ['align', 'scale', 'value', 'displayToolTip'],
 
+  /** @private */
   renderDelegateName: function () {
     return (this.get('useCanvas') ? 'canvasImage' : 'image') + "RenderDelegate";
   }.property('useCanvas').cacheable(),
 
+  /** @private */
   tagName: function () {
     return this.get('useCanvas') ? 'canvas' : 'div';
   }.property('useCanvas').cacheable(),
@@ -145,7 +147,7 @@ SC.ImageView = SC.View.extend(SC.Control, SC.InnerFrame,
   */
   useCanvas: function () {
     return SC.platform.supportsCanvas && !this.get('useStaticLayout');
-  }.property('useStaticLayout', 'type').cacheable(),
+  }.property('useStaticLayout').cacheable(),
 
   /**
     If YES, image view will use the SC.imageQueue to control loading.  This
@@ -174,6 +176,7 @@ SC.ImageView = SC.View.extend(SC.Control, SC.InnerFrame,
     @type String
   */
   value: null,
+  valueBindingDefault: SC.Binding.oneWay(),
 
   /**
     Recalculate our innerFrame if the outer frame has changed.

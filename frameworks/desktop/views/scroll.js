@@ -22,15 +22,34 @@ SC.NORMAL_SCROLL_DECELERATION = 0.95;
 SC.FAST_SCROLL_DECELERATION = 0.85;
 
 /** @class
-  Implements a complete scroll view.  This class uses a manual implementation
-  of scrollers in order to properly support clipping frames.
+  Implements a complete scroll view. SproutCore implements its own JS-based scrolling in order
+  to unify scrolling behavior across platforms, and to enable progressive rendering (via the
+  clipping frame) during scroll on all devices.
 
-  Important Events:
+  Important Events
+  -----
 
     - contentView frame size changes (to autoshow/hide scrollbar - adjust scrollbar size)
     - horizontalScrollOffset change
     - verticalScrollOffsetChanges
     - scroll wheel events
+
+  Gutter vs. Overlaid Scrollers
+  -----
+
+  Scroll views use swappable scroll-bar views with various behavior (see `verticalScrollerView`
+  and `horizontalScrollerView`). `SC.ScrollerView` is a gutter-based scroller which persists and
+  takes up fourteen pixels. (By default, no scroller is shown for content that is too small to
+  scroll; see `autohidesHorizontalScroller` and `autohidesVerticalScroller`.) `SC.OverlayScrollerView`
+  is a gutterless view which fades when not scrolling. By default, SC.ScrollView uses the gutter
+  scroller on mouse-based systems and the fading scroller on touch-base systems. If you would
+  like your view to always have OS X-style fading overlaid scrollers, you can use the following:
+
+        SC.ScrollView.extend({
+          verticalOverlay: YES,
+          verticalScrollerView: SC.OverlayScrollerView
+          // repeat for horizontal scrollers
+        });
 
   @extends SC.View
   @since SproutCore 1.0
@@ -338,6 +357,29 @@ SC.ScrollView = SC.View.extend({
     return this.get('frame').width;
   }.property('frame'),
 
+  /**
+    Determines whether the vertical scroller should fade out while in overlay mode. Has no effect if verticalOverlay is set to false.
+
+    @property Boolean
+    @default YES
+   */
+  verticalFade: YES,
+
+  /**
+    Determines whether the horizontal scroller should fade out while in overlay mode. Has no effect if verticalOverlay is set to false.
+
+    @property Boolean
+    @default YES
+   */
+  horizontalFade: YES,
+
+  /**
+    Determines how long (in seconds) scrollbars wait before fading out.
+
+    @property Number
+    @default 0.4
+   */
+  fadeOutDelay: 0.4,
 
   // ..........................................................
   // SCROLLERS
@@ -368,9 +410,9 @@ SC.ScrollView = SC.View.extend({
     hasHorizontalScroller is NO.
 
     @type SC.View
-    @default SC.TouchScrollerView
+    @default SC.OverlayScrollerView
   */
-  horizontalTouchScrollerView: SC.TouchScrollerView,
+  horizontalTouchScrollerView: SC.OverlayScrollerView,
 
   /**
     YES if the horizontal scroller should be visible.  You can change this
@@ -431,9 +473,9 @@ SC.ScrollView = SC.View.extend({
     instance when the ScrollView is created.
 
     @type SC.View
-    @default SC.TouchScrollerView
+    @default SC.OverlayScrollerView
   */
-  verticalTouchScrollerView: SC.TouchScrollerView,
+  verticalTouchScrollerView: SC.OverlayScrollerView,
 
   /**
     YES if the vertical scroller should be visible.  You can change this
@@ -654,31 +696,35 @@ SC.ScrollView = SC.View.extend({
 
   /**
     Scroll to the supplied rectangle.
+    If the rectangle is bigger than the viewport, the top-left
+    will be preferred.
     @param {Rect} rect Rectangle to scroll to.
     @returns {Boolean} YES if scroll position was changed.
   */
   scrollToRect: function (rect) {
     // find current visible frame.
-    var vo = SC.cloneRect(this.get('containerView').get('frame'));
+    var vo = SC.cloneRect(this.get('containerView').get('frame')),
+        origX = this.get('horizontalScrollOffset'),
+        origY = this.get('verticalScrollOffset');
 
-    vo.x = this.get('horizontalScrollOffset');
-    vo.y = this.get('verticalScrollOffset');
-
-    var origX = vo.x, origY = vo.y;
-
-    // if top edge is not visible, shift origin
-    vo.y -= Math.max(0, SC.minY(vo) - SC.minY(rect));
-    vo.x -= Math.max(0, SC.minX(vo) - SC.minX(rect));
+    vo.x = origX;
+    vo.y = origY;
 
     // if bottom edge is not visible, shift origin
     vo.y += Math.max(0, SC.maxY(rect) - SC.maxY(vo));
     vo.x += Math.max(0, SC.maxX(rect) - SC.maxX(vo));
 
+    // if top edge is not visible, shift origin
+    vo.y -= Math.max(0, SC.minY(vo) - SC.minY(rect));
+    vo.x -= Math.max(0, SC.minX(vo) - SC.minX(rect));
+
     // scroll to that origin.
     if ((origX !== vo.x) || (origY !== vo.y)) {
       this.scrollTo(vo.x, vo.y);
       return YES;
-    } else return NO;
+    } else {
+      return NO;
+    }
   },
 
 
@@ -820,12 +866,17 @@ SC.ScrollView = SC.View.extend({
         height: ht
       };
       hscroll.set('layout', layout);
+
+      // Check for overlay.
       ho = this.get('horizontalOverlay');
       clipLayout.bottom = ho ? 0 : (layout.bottom + ht);
     } else {
       clipLayout.bottom = 0;
     }
-    if (hscroll) hscroll.set('isVisible', hasHorizontal);
+    if (hscroll) {
+      hscroll.set('isVisible', hasHorizontal);
+      this._sc_fadeOutHorizontalScroller();
+    }
 
     if (hasVertical) {
       ht     = ht + this.get('verticalScrollerBottom');
@@ -837,12 +888,17 @@ SC.ScrollView = SC.View.extend({
         width: vt
       };
       vscroll.set('layout', layout);
+
+      // Check for overlay.
       vo = this.get('verticalOverlay');
       clipLayout.right = vo ? 0 : (layout.right + vt);
     } else {
       clipLayout.right = 0;
     }
-    if (vscroll) vscroll.set('isVisible', hasVertical);
+    if (vscroll) {
+      vscroll.set('isVisible', hasVertical);
+      this._sc_fadeOutVerticalScroller();
+    }
 
     clip.adjust(clipLayout);
   },
@@ -981,6 +1037,108 @@ SC.ScrollView = SC.View.extend({
   },
 
 
+  // ------------------------------------------------------------------------
+  // Fade Support
+  //
+
+  /** @private The minimum delay before applying a fade transition. */
+  _sc_minimumFadeOutDelay: function () {
+    // The fade out delay is never less than 100ms (so that the current run loop can complete) and is never less than the fade in duration (so that it can fade fully in).
+    return Math.max(Math.max(this.get('fadeOutDelay') || 0, 0.1), this.get('fadeInDuration') || 0) * 1000;
+  }.property('fadeOutDelay').cacheable(),
+
+  /** @private
+    Trigger fade-in/fade-out as soon as we re-appear.
+  */
+  didShowInDocument: function () {
+    this.invokeLast(this._sc_fadeInScrollers);
+  },
+
+  /** @private
+    Trigger fade-in/fade-out as soon as we are appended.
+  */
+  didAppendToDocument: function () {
+    this.invokeLast(this._sc_fadeInScrollers);
+  },
+
+  /** @private */
+  _sc_fadeOutScrollers: function () {
+    this._sc_fadeOutVerticalScroller();
+    this._sc_fadeOutHorizontalScroller();
+  },
+
+  _sc_fadeOutVerticalScroller: function () {
+    var verticalScroller = this.get('verticalScrollerView');
+
+    if (verticalScroller && verticalScroller.get('fadeOut')) {
+      // Fade out.
+      verticalScroller.fadeOut();
+    }
+
+    this._sc_verticalFadeOutTimer = null;
+  },
+
+  _sc_fadeOutHorizontalScroller: function () {
+    var horizontalScroller = this.get('horizontalScrollerView');
+
+    if (horizontalScroller && horizontalScroller.get('fadeOut')) {
+      // Fade out.
+      horizontalScroller.fadeOut();
+    }
+
+    this._sc_horizontalFadeOutTimer = null;
+  },
+
+  /** @private */
+  _sc_fadeInScrollers: function () {
+    this._sc_fadeInVerticalScroller();
+    this._sc_fadeInHorizontalScroller();
+  },
+
+  /** @private Fade in the vertical scroller. Each scroller fades in/out independently. */
+  _sc_fadeInVerticalScroller: function () {
+    var canScrollVertical = this.get('canScrollVertical'),
+      verticalScroller = this.get('verticalScrollerView'),
+      delay;
+
+    if (canScrollVertical && verticalScroller.get('fadeIn')) {
+      if (this._sc_verticalFadeOutTimer) {
+        // Reschedule the current timer (avoid creating a new instance).
+        this._sc_verticalFadeOutTimer.startTime = null;
+        this._sc_verticalFadeOutTimer.schedule();
+      } else {
+        // Fade in.
+        verticalScroller.fadeIn();
+
+        // Wait the minimum time before fading out again.
+        delay = this.get('_sc_minimumFadeOutDelay');
+        this._sc_verticalFadeOutTimer = this.invokeLater(this._sc_fadeOutVerticalScroller, delay);
+      }
+    }
+  },
+
+  /** @private Fade in the horizontal scroller. Each scroller fades in/out independently. */
+  _sc_fadeInHorizontalScroller: function () {
+    var canScrollHorizontal = this.get('canScrollHorizontal'),
+      horizontalScroller = this.get('horizontalScrollerView'),
+      delay;
+
+    if (canScrollHorizontal && horizontalScroller.get('fadeIn')) {
+      if (this._sc_horizontalFadeOutTimer) {
+        // Reschedule the current timer (avoid creating a new instance).
+        this._sc_horizontalFadeOutTimer.startTime = null;
+        this._sc_horizontalFadeOutTimer.schedule();
+      } else {
+        // Fade in.
+        horizontalScroller.fadeIn();
+
+        // Wait the minimum time before fading out again.
+        delay = this.get('_sc_minimumFadeOutDelay');
+        this._sc_horizontalFadeOutTimer = this.invokeLater(this._sc_fadeOutHorizontalScroller, delay);
+      }
+    }
+  },
+
   // ..........................................................
   // Touch Support
   //
@@ -1019,16 +1177,20 @@ SC.ScrollView = SC.View.extend({
   alwaysBounceVertical: YES,
 
   /**
-    Whether to delay touches from passing through to the content.
+    Whether to delay touches from passing through to the content. By default, if the touch moves enough to
+    trigger a scroll within 150ms, this view will retain control of the touch, and content views will not
+    have a chance to handle it. This is generally the behavior you want.
+
+    If you set this to NO, the touch will not trigger a scroll until you pass control back to this view via
+    `touch.restoreLastTouchResponder`, for example when the touch has dragged by a certain amount. You should
+    use this option only if you know what you're doing.
 
     @type Boolean
     @default YES
   */
   delaysContentTouches: YES,
 
-  /** @private
-    If the view supports it, this
-  */
+  /** @private */
   _touchScrollDidChange: function () {
     if (this.get("contentView").touchScrollDidChange) {
       this.get("contentView").touchScrollDidChange(
@@ -1037,7 +1199,6 @@ SC.ScrollView = SC.View.extend({
       );
     }
 
-    // tell scrollers
     if (this.verticalScrollerView && this.verticalScrollerView.touchScrollDidChange) {
       this.verticalScrollerView.touchScrollDidChange(this._scroll_verticalScrollOffset);
     }
@@ -1045,6 +1206,8 @@ SC.ScrollView = SC.View.extend({
     if (this.horizontalScrollerView && this.horizontalScrollerView.touchScrollDidChange) {
       this.horizontalScrollerView.touchScrollDidChange(this._scroll_horizontalScrollOffset);
     }
+
+    this.invokeLast(this._sc_fadeInScrollers);
   },
 
   /** @private */
@@ -1096,8 +1259,16 @@ SC.ScrollView = SC.View.extend({
   },
 
   /** @private */
-  captureTouch: function () {
-    return YES;
+  captureTouch: function (touch) {
+    // If we're in hand-holding mode, we capture the touch and run our own downstream event propagating.
+    if (this.get('delaysContentTouches')) {
+      return YES;
+    }
+    // Otherwise, suggest ourselves as a reasonable fallback responder.
+    else {
+      touch.stackCandidateTouchResponder(this);
+      return NO;
+    }
   },
 
   /** @private */
@@ -1105,20 +1276,25 @@ SC.ScrollView = SC.View.extend({
 
   /** @private */
   touchStart: function (touch) {
-    var generation = ++this.touchGeneration;
-    if (!this.tracking && this.get("delaysContentTouches")) {
-      this.invokeLater(this.beginTouchesInContent, 150, generation);
-    } else if (!this.tracking) {
-      // NOTE: We still have to delay because we don't want to call touchStart
-      // while touchStart is itself being called...
-      this.invokeLater(this.beginTouchesInContent, 1, generation);
+    var generation = ++this.touchGeneration,
+        alreadyTracking = this.tracking;
+    // If we're already tracking a touch, make sure it's not literally the same touch coming back around.
+    if (!this.touch || this.touch.touch !== touch) this.beginTouchTracking(touch, YES);
+    // If necessary, call beginTouchesInContent, which gives child views a chance to capture or handle the event.
+    if (!alreadyTracking) {
+      if (this.get('delaysContentTouches')) {
+        this.invokeLater(this.beginTouchesInContent, 150, generation);
+      }
     }
-    this.beginTouchTracking(touch, YES);
     return YES;
   },
 
-  /** @private */
+  /** @private
+    This method gives our descendent views a chance to capture the touch via captureTouch, and subsequently to handle the
+    touch, via touchStart. If no view elects to do so, control is returned to the scroll view for standard scrolling.
+  */
   beginTouchesInContent: function (gen) {
+    // If this was invokedLater and is now out of date, we should quit.
     if (gen !== this.touchGeneration) return;
 
     var touch = this.touch;
@@ -1129,18 +1305,18 @@ SC.ScrollView = SC.View.extend({
     // then the timer expires and starts a new Run Loop to call beginTouchesInContent(), that this.touch will STILL exist
     // here.  There's no explanation for it, and it's not 100% reproducible, but what happens is that if we try to capture
     // the touch that has already ended, assignTouch() in RootResponder will check touch.hasEnded and throw an exception.
-
-    // Therefore, don't capture a touch if the touch still exists and hasEnded
-    if (touch && this.tracking && !this.dragging && !touch.touch.scrollHasEnded && !touch.touch.hasEnded) {
-      // try to capture the touch
+    // Therefore, don't capture a touch if the touch still exists and touch.touch.hasEnded
+    if (touch && this.tracking && !this.dragging && !touch.touch.scrollHasEnded && !touch.touch.hasEnded) { // see note above for touch.touch.hasEnded
+      // See if any of our descendent views want to handle the touch.
       touch.touch.captureTouch(this, YES);
 
+      // If nobody captured the touch, we need to take responsibility for it ourselves.
       if (!touch.touch.touchResponder) {
-        // if it DIDN'T WORK!!!!!
-        // then we need to take possession again.
         touch.touch.makeTouchResponder(this);
-      } else {
-        // Otherwise, it did work, and if we had a pending scroll end, we must do it now
+      }
+      // If respondership ended up with a child view, and we have a pending scroll, we need to
+      // execute it now.
+      else if (touch.touch.touchResponder !== this) {
         if (touch.needsScrollEnd) {
           this._touchScrollDidEnd();
         }
@@ -1154,7 +1330,8 @@ SC.ScrollView = SC.View.extend({
     We keep information about the initial location of the touch so we can
     disambiguate between a tap and a drag.
 
-    @param {Event} evt
+    @param {Event} touch
+    @param {Event} starting 
   */
   beginTouchTracking: function (touch, starting) {
     var avg = touch.averagedTouchesForView(this, starting);
@@ -1451,10 +1628,12 @@ SC.ScrollView = SC.View.extend({
 
         this.startDecelerationAnimation();
       } else {
-        // well. The scrolling stopped. Let us tell everyone if there was a pending one that this non-drag op interrupted.
+        // End the scroll if there's one that's needed even if we're not dragging.
         if (touchStatus.needsScrollEnd) this._touchScrollDidEnd();
 
-        // this part looks weird, but it is actually quite simple.
+        // Now, if the touch ended without dragging, that means it was a tap, and we should give our
+        // child views a chance to handle it.
+
         // First, we send the touch off for capture+starting again, but telling it to return to us
         // if nothing is found or if it is released.
         touch.captureTouch(this, YES);
@@ -1464,7 +1643,7 @@ SC.ScrollView = SC.View.extend({
           touch.end();
         } else if (!touch.touchResponder || touch.touchResponder === this) {
           // if it was released to us or stayed with us the whole time, or is for some
-          // wacky reason empty (in which case it is ours still). If so, and there is a next responder,
+          // wacky reason empty (in which case it is ours still), and there is a next responder,
           // relay to that.
 
           if (touch.nextTouchResponder) touch.makeTouchResponder(touch.nextTouchResponder);
@@ -1796,7 +1975,7 @@ SC.ScrollView = SC.View.extend({
       contentView.addObserver('layer', this, 'contentViewLayerDidChange');
     }
 
-    if (this.get('isVisibleInWindow')) this._scsv_registerAutoscroll();
+    if (this.get('isVisibleInWindow')) this._sc_registerAutoscroll();
 
     // Initialize cache values.
     this._scroll_contentWidth = this._scroll_contentHeight = null;
@@ -1805,7 +1984,7 @@ SC.ScrollView = SC.View.extend({
   /** @private
     Registers/deregisters view with SC.Drag for autoscrolling
   */
-  _scsv_registerAutoscroll: function () {
+  _sc_registerAutoscroll: function () {
     if (this.get('isVisibleInWindow')) SC.Drag.addScrollableView(this);
     else SC.Drag.removeScrollableView(this);
   }.observes('isVisibleInWindow'),
@@ -1976,6 +2155,7 @@ SC.ScrollView = SC.View.extend({
   */
   _scroll_horizontalScrollOffsetDidChange: function () {
     this.invokeLast(this.adjustElementScroll);
+    this.invokeLast(this._sc_fadeInScrollers);
   }.observes('horizontalScrollOffset'),
 
   /** @private
@@ -1984,6 +2164,7 @@ SC.ScrollView = SC.View.extend({
   */
   _scroll_verticalScrollOffsetDidChange: function () {
     this.invokeLast(this.adjustElementScroll);
+    this.invokeLast(this._sc_fadeInScrollers);
   }.observes('verticalScrollOffset'),
 
   /** @private

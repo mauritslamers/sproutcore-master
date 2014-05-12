@@ -230,6 +230,9 @@ SC.CoreView.reopen(
   /* @private Internal variable used to store the original frame before running an automatic transition. */
   _preTransitionFrame: null,
 
+  /* @private Internal variable used to cache layout properties which must be reset after the transition. */
+  _transitionLayoutCache: null,
+
   /**
     The current state of the view as managed by its internal statechart.
 
@@ -362,6 +365,9 @@ SC.CoreView.reopen(
       idx = (beforeView) ? childViews.indexOf(beforeView) : childViews.length;
       if (idx < 0) { idx = childViews.length; }
       childViews.insertAt(idx, this);
+
+      // Pass the current designMode to the view (and its children).
+      this.updateDesignMode(this.get('designMode'), parentView.get('designMode'));
 
       // Notify adopted (on self and all child views).
       this._adopted();
@@ -506,8 +512,10 @@ SC.CoreView.reopen(
     case SC.CoreView.ATTACHED_SHOWN:
     case SC.CoreView.ATTACHED_SHOWN_ANIMATING:
       //@if(debug)
-      // This should be avoided, because moving the view layer without explicitly removing it first is a dangerous practice.
-      SC.warn("Developer Warning: You can not attach the view, %@, to a new node without properly detaching it first.".fmt(this));
+      if (parentNode !== this.getPath('parentView.layer')) {
+        // This should be avoided, because moving the view layer without explicitly removing it first is a dangerous practice.
+        SC.warn("Developer Warning: You can not attach the view, %@, to a new node without properly detaching it first.".fmt(this));
+      }
       //@endif
       break;
     case SC.CoreView.UNATTACHED_BY_PARENT:
@@ -1623,25 +1631,43 @@ SC.CoreView.reopen(
   },
 
   /** @private */
-  _setupTransition: function () {
+  _setupTransition: function (transition) {
+    // Get a copy of the layout.
+    var layout = SC.clone(this.get('layout'));
     // Prepare for a transition.
-    this._preTransitionLayout = SC.clone(this.get('layout'));
+    this._preTransitionLayout = layout;
     this._preTransitionFrame = this.get('borderFrame');
+    // Cache appropriate layout values.
+    var layoutProperties = SC.get(transition, 'layoutProperties');
+    // If the transition specifies any layouts, cache them.
+    if (layoutProperties && layoutProperties.length) {
+      this._transitionLayoutCache = {};
+      var i, prop, len = layoutProperties.length;
+      for (i = 0; i < len; i++) {
+        prop = layoutProperties[i];
+        this._transitionLayoutCache[prop] = layout[prop] === undefined ? null : layout[prop];
+      }
+    }
   },
 
   /** @private */
   _teardownTransition: function () {
-    // Some transition plugins will send a didTransitionIn/Out event even
-    // if the transition was cancelled. In either case, the transition can't
-    // be cleaned up multiple times.
-    if (this._preTransitionLayout) {
-      // Reset the layout to its original value.
-      this.set('layout', this._preTransitionLayout);
+    // Make sure this isn't being called twice for the same transition. For example,
+    // some transition plugins will send a didTransitionIn/Out event even if the
+    // transition was cancelled.
 
-      // Clean up.
-      this._preTransitionLayout = null;
-      this._preTransitionFrame = null;
+    // If we have a hash of cached layout properties, adjust back to it.
+    if (this._transitionLayoutCache) {
+      this.adjust(this._transitionLayoutCache);
     }
+    // Otherwise, just set the layout back to what it was.
+    else if (this._preTransitionLayout) {
+      this.set('layout', this._preTransitionLayout);
+    }
+    // Clean up.
+    this._preTransitionLayout = null;
+    this._preTransitionFrame = null;
+    this._transitionLayoutCache = null;
   },
 
   /** @private Attempts to run a transition hide, ensuring any incoming transitions are stopped in place. */
@@ -1662,7 +1688,7 @@ SC.CoreView.reopen(
     //   inPlace = true;
     //   break;
     // default:
-    this._setupTransition();
+    this._setupTransition(transitionHide);
     // }
 
     // Set up the hiding transition.
@@ -1688,7 +1714,7 @@ SC.CoreView.reopen(
       inPlace = true;
       break;
     default:
-      this._setupTransition();
+      this._setupTransition(transitionIn);
     }
 
     // Set up the incoming transition.
@@ -1706,7 +1732,7 @@ SC.CoreView.reopen(
       options = this.get('transitionOutOptions') || {};
 
     if (!inPlace) {
-      this._setupTransition();
+      this._setupTransition(transitionOut);
     }
 
     // Increment the shared building out count.
@@ -1736,7 +1762,7 @@ SC.CoreView.reopen(
     //   this.cancelAnimation(SC.LayoutState.CURRENT);
     //   inPlace = true;
     // } else {
-    this._setupTransition();
+    this._setupTransition(transitionShow);
     // }
 
     // Set up the showing transition.

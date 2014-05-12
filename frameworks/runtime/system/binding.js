@@ -71,16 +71,35 @@ SC.EMPTY_PLACEHOLDER = '@@EMPTY@@';
   property of your object instance automatically.  Now the two values will be
   kept in sync.
 
-  Customizing Your Bindings
+  One-Way Bindings
+  ===
+
+  By default, bindings are set up as two-way. In cases where you only need the
+  binding to function in one direction, for example if a value from a controller
+  is bound into a read-only LabelView, then for performance reasons you should
+  use a one-way binding. To do this, call the very useful `oneWay` helper:
+
+      valueBinding: SC.Binding.oneWay('MyApp.someController.title')
+
+  or:
+
+      valueBinding: SC.Binding.from('MyApp.someController.title').oneWay()
+
+  This way if the value of MyApp.someController.title changes, your object's
+  `value` will also update. Since `value` will never update on its own, this will
+  avoid the setup time required to plumb the binding in the other direction,
+  nearly doubling performance for this binding.
+
+  Transforms
   ===
 
   In addition to synchronizing values, bindings can also perform some basic
   transforms on values.  These transforms can help to make sure the data fed
-  into one object always meets the expectations of that object regardless of
+  into one object always meets the expectations of that object, regardless of
   what the other object outputs.
 
   To customize a binding, you can use one of the many helper methods defined
-  on SC.Binding like so:
+  on SC.Binding. For example:
 
         valueBinding: SC.Binding.single("MyApp.someController.title")
 
@@ -98,29 +117,14 @@ SC.EMPTY_PLACEHOLDER = '@@EMPTY@@';
   or an empty string).  If it is empty, the value will be set to the string
   "(EMPTY)".
 
-  One Way Bindings
-  ===
+  The following transform helper methods are included: `noError`, `single`, `notEmpty`,
+  `notNull`, `multiple`, `bool`, `not`, `isNull`, `and` (two values only), `or` (two
+  values only), and `equalTo`. See each method's documentation for a full description.
 
-  One especially useful binding customization you can use is the oneWay()
-  helper.  This helper tells SproutCore that you are only interested in
-  receiving changes on the object you are binding from.  For example, if you
-  are binding to a preference and you want to be notified if the preference
-  has changed, but your object will not be changing the preference itself, you
-  could do:
-
-        bigTitlesBinding: SC.Binding.oneWay("MyApp.preferencesController.bigTitles")
-
-  This way if the value of MyApp.preferencesController.bigTitles changes the
-  "bigTitles" property of your object will change also.  However, if you
-  change the value of your "bigTitles" property, it will not update the
-  preferencesController.
-
-  One way bindings are almost twice as fast to setup and twice as fast to
-  execute because the binding only has to worry about changes to one side.
-
-  You should consider using one way bindings anytime you have an object that
-  may be created frequently and you do not intend to change a property; only
-  to monitor it for changes. (such as in the example above).
+  (Note that transforms are only applied in the forward direction (the 'to' side); values
+  are applied untransformed to the 'from' side. If the 'from' object has validation
+  needs, it should own and apply them itself, for example via a read/write calculated
+  property.)
 
   Adding Custom Transforms
   ===
@@ -196,7 +200,10 @@ SC.EMPTY_PLACEHOLDER = '@@EMPTY@@';
   the result of these customizations will be a binding template, not a fully
   active binding.  The binding will actually become active only when you
   instantiate the object the binding belongs to.  It is useful however, to
-  understand what actually happens when the binding is activated.
+  understand what actually happens when the binding is activated. (Of course
+  you should always use the highest-level APIs available, even if you understand
+  how it works underneath; unless you have specific needs, you should rely on
+  the convenience `fooBinding` format.)
 
   For a binding to function it must have at least a "from" property and a "to"
   property.  The from property path points to the object/key that you want to
@@ -246,14 +253,19 @@ SC.EMPTY_PLACEHOLDER = '@@EMPTY@@';
         });
 
   SproutCore's built in binding creation method make it easy to automatically
-  create bindings for you.  You should always use the highest-level APIs
-  available, even if you understand how to it works underneath.
+  create bindings for you. If you need further documentation on SC.Binding's inner
+  workings, see the private method documentation in the source code.
 
   @since SproutCore 1.0
 */
 SC.Binding = /** @scope SC.Binding.prototype */{
 
   /**
+    Quack.
+  */
+  isBinding: YES,
+
+  /** @private
     This is the core method you use to create a new binding instance.  The
     binding instance will have the receiver instance as its parent which means
     any configuration you have there will be inherited.
@@ -277,7 +289,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     return ret;
   },
 
-  /**
+  /** @private
     Returns a builder function for compatibility.
   */
   builder: function () {
@@ -318,9 +330,13 @@ SC.Binding = /** @scope SC.Binding.prototype */{
   },
 
   /**
-   This will set the "to" property path to the specified value.  It will not
-   attempt to reoslve this property path to an actual object/property tuple
-   until you connect the binding.
+    This will set the "to" property path to the specified value.  It will not
+    attempt to reoslve this property path to an actual object/property tuple
+    until you connect the binding.
+
+    If you are using the convenience format `fooBinding`, for example
+    `isVisibleBinding`, you do not need to call this method, as the `to` property
+    path will be generated for you when its object is created.
 
     @param {String|Tuple} propertyPath A property path or tuple
     @param {Object} [root] root object to use when resolving the path.
@@ -427,7 +443,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     }
   },
 
-  /**
+  /** 
     Disconnects the binding instance.  Changes will no longer be relayed.  You
     will not usually need to call this method.
 
@@ -456,7 +472,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     return this;
   },
 
-  /**
+  /** @private
     Indicates when the binding has been destroyed.
 
     @type Boolean
@@ -464,7 +480,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
   */
   isDestroyed: NO,
 
-  /**
+  /** @private
     Disconnects the binding and removes all properties and external references. Called by
     either binding target object when destroyed.
 
@@ -495,7 +511,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     this._toObserverData = this._fromObserverData = null;
   },
 
-  /**
+  /** @private
     Invoked whenever the value of the "from" property changes.  This will mark
     the binding as dirty if the value has changed.
 
@@ -530,7 +546,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     }
   },
 
-  /**
+  /** @private
     Invoked whenever the value of the "to" property changes.  This will mark the
     binding as dirty only if:
 
@@ -572,6 +588,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     }
   },
 
+  /** @private */
   _scheduleSync: function () {
     if (SC.RunLoop.isRunLoopInProgress() || SC.Binding._syncScheduled) { return; }
     SC.Binding._syncScheduled = YES;
@@ -594,26 +611,36 @@ SC.Binding = /** @scope SC.Binding.prototype */{
   _computeBindingValue: function () {
     var source = this._bindingSource,
         key    = this._bindingKey,
-        v, idx;
+        v;
 
     this._bindingValue = v = (source ? source.getPath(key) : null);
+    this._transformedBindingValue = this._computeTransformedValue(v);
+  },
 
-    // apply any transforms to get the to property value also
-    var transforms = this._transforms;
+  /** @private
+    Applies transforms to the value and returns the transfomed value.
+    @param {*} value Binding value to transform
+    @returns {*} Transformed value
+  */
+  _computeTransformedValue: function (value) {
+    var transforms = this._transforms,
+        idx,
+        len,
+        transform;
+
     if (transforms) {
-      var len = transforms.length,
-          transform;
+      len = transforms.length;
       for (idx = 0; idx < len; idx++) {
         transform = transforms[idx];
-        v = transform(v, this);
+        value = transform(value, this);
       }
     }
 
     // if error objects are not allowed, and the value is an error, then
     // change it to null.
-    if (this._noError && SC.typeOf(v) === SC.T_ERROR) v = null;
+    if (this._noError && SC.typeOf(value) === SC.T_ERROR) { value = null; }
 
-    this._transformedBindingValue = v;
+    return value;
   },
 
   _connectQueue: SC.CoreSet.create(),
@@ -621,8 +648,8 @@ SC.Binding = /** @scope SC.Binding.prototype */{
   _changeQueue: SC.CoreSet.create(),
   _alternateChangeQueue: SC.CoreSet.create(),
 
-  /**
-    Call this method on SC.Binding to flush all bindings with changed pending.
+  /** @private
+    Call this method on SC.Binding to flush all bindings with changes pending.
 
     @returns {Boolean} YES if changes were flushed.
   */
@@ -676,7 +703,7 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     return didFlush;
   },
 
-  /**
+  /** @private
     This method is called at the end of the Run Loop to relay the changed
     binding value from one side to the other.
   */
@@ -731,9 +758,14 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     just changed.
 
     This method is useful when you are dynamically connecting bindings to a
-    network of objects that may have already been initialized.
+    network of objects that may have already been initialized. Otherwise you
+    should not need to call this method.
   */
   sync: function () {
+    var target,
+        key,
+        v,
+        tv;
 
     // do nothing if not connected
     if (!this.isConnected) return this;
@@ -745,8 +777,8 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     // we are connected, go ahead and sync
     } else {
       this._computeBindingTargets();
-      var target = this._fromTarget,
-          key = this._fromPropertyKey;
+      target = this._fromTarget;
+      key = this._fromPropertyKey;
       if (!target || !key) return this; // nothing to do
 
       // Let's check for whether target is a valid observable with getPath.
@@ -754,16 +786,30 @@ SC.Binding = /** @scope SC.Binding.prototype */{
       //
       // If we have a target, it is ready, but if it is invalid, that is WRONG.
       if (!target.isObservable) {
-        SC.Logger.warn("Cannot bind '%@' to property '%@' on non-observable '%@'".fmt(this._toPropertyPath, key, target));
+        //@if(debug)
+        // Provide some developer support.
+        if (target === window) {
+          var msg = "Developer Warning: You are attempting to bind \"%{to_root}\"'s '%{to_property}' property to the non-observable 'window.%{key}'. It's likely that you've specified a local binding path without prepending a period. For example, you may have `%{to_property}Binding: '%{key}'` instead of `%{to_property}Binding: '.%{key}'`.";
+          msg = msg.fmt({
+            to_root: (this._toRoot || 'object').toString(),
+            to_property: this._toPropertyPath,
+            key: key
+          });
+          SC.Logger.warn(msg);
+        } else {
+          SC.Logger.warn("Developer Warning: Cannot bind \"%@\"'s '%@' property to property '%@' on non-observable '%@'".fmt((this._toRoot || 'object').toString(), this._toPropertyPath, key, target));
+        }
+        //@endif
         return this;
       }
 
       // get the new value
-      var v = target.getPath(key);
+      v = target.getPath(key);
+      tv = this._computeTransformedValue(v);
 
       // if the new value is different from the current binding value, then
       // schedule to register an update.
-      if (v !== this._bindingValue || key === '[]') {
+      if (v !== this._bindingValue || tv !== this._transformedBindingValue || key === '[]') {
         this._setBindingValue(target, key);
         SC.Binding._changeQueue.add(this); // save for later.
       }
@@ -772,9 +818,12 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     return this;
   },
 
-  // set if you call sync() when the binding connection is still pending.
+  /** @private
+    set if you call sync() when the binding connection is still pending.
+   */
   _syncOnConnect: NO,
 
+  /** @private */
   _computeBindingTargets: function () {
     var path, root, tuple;
 
@@ -820,11 +869,15 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     }
   },
 
+  // -------------------------------
+  // Helper Methods
+  //
+
   /**
     Configures the binding as one way.  A one-way binding will relay changes
     on the "from" side to the "to" side, but not the other way around.  This
-    means that if you change the "to" side directly, the "from" side may have
-    a different value.
+    means that if you change the "to" side directly, the "from" side will not
+    be updated, and may have a different value.
 
     @param {String} [fromPath] from path to connect.
     @param {Boolean} [aFlag] Pass NO to set the binding back to two-way
@@ -853,10 +906,14 @@ SC.Binding = /** @scope SC.Binding.prototype */{
 
           function (value) {};
 
+    or:
+
+          function (value, binding) {};
+
     It must return either the transformed value or an error object.
 
     Transform functions are chained, so they are called in order.  If you are
-    extending a binding and want to reset the transforms, you can call
+    extending a binding and want to reset its transforms, you can call
     resetTransform() first.
 
     @param {Function} transformFunc the transform function.
@@ -1046,16 +1103,18 @@ SC.Binding = /** @scope SC.Binding.prototype */{
 
   /* @private Used with the logic gate bindings. */
   _LogicGateAnd: SC.Object.extend({
-    logicProperty: function() {
+    logicProperty: function () {
       return (this.get('valueA') && this.get('valueB'));
     }.property('valueA', 'valueB').cacheable()
   }),
+
   /* @private Used with the logic gate bindings. */
   _LogicGateOr: SC.Object.extend({
-    logicProperty: function() {
+    logicProperty: function () {
       return (this.get('valueA') || this.get('valueB'));
     }.property('valueA', 'valueB').cacheable()
   }),
+
   /* @private Used by logic gate bindings. */
   _logicGateBinding: function (gateClass, pathA, pathB) {
     // If either path is local, remove any * chains and append the localObject path to it.
@@ -1070,11 +1129,11 @@ SC.Binding = /** @scope SC.Binding.prototype */{
 
     // Gets the gate class and instantiates a nice copy.
     var gateHash = {
-          localObject: null,
-          valueABinding: SC.Binding.oneWay(pathA),
-          valueBBinding: SC.Binding.oneWay(pathB)
-        },
-        gate = gateClass.create(gateHash);
+        localObject: null,
+        valueABinding: SC.Binding.oneWay(pathA),
+        valueBBinding: SC.Binding.oneWay(pathB)
+      },
+      gate = gateClass.create(gateHash);
 
     // Creates and populates the return binding.
     var ret = this.from('logicProperty', gate).oneWay();
@@ -1130,6 +1189,32 @@ SC.Binding = /** @scope SC.Binding.prototype */{
     return this._logicGateBinding(this._LogicGateOr, pathA, pathB);
   },
 
+  /**
+    Adds a transform that will return YES if the value is equal to equalValue, NO otherwise.
+
+      isVisibleBinding: SC.Binding.oneWay("MyApp.someController.title").equalTo(comparisonValue)
+
+    Or:
+
+      isVisibleBinding: SC.Binding.equalTo("MyApp.someController.title", comparisonValue)
+
+    @param {String} fromPath from path or null
+    @param {Object} equalValue the value to compare with
+    @returns {SC.Binding} this
+  */
+  equalTo: function(fromPath, equalValue) {
+    // Normalize arguments.
+    if (equalValue === undefined) {
+      equalValue = fromPath;
+      fromPath = null;
+    }
+
+    return this.from(fromPath).transform(function(value, binding) {
+       return value === equalValue;
+     });
+  },
+
+  /** @private */
   toString: function () {
     var from = this._fromRoot ? "<%@>:%@".fmt(this._fromRoot, this._fromPropertyPath) : this._fromPropertyPath;
 

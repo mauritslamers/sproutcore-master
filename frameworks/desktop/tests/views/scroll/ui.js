@@ -5,11 +5,11 @@
 // License:   Licensed under MIT license (see license.js)
 // ==========================================================================
 
-/*global module test ok equals same stop start */
+/*global module, test, ok, equals, same, stop, start */
 
-(function() {
+(function () {
     var appleURL="http://photos4.meetupstatic.com/photos/event/4/6/9/9/600_4518073.jpeg";
-    var iv=SC.ImageView.design({value: appleURL, layout: {height:400, width:400}});
+    var iv = SC.ImageView.design({value: appleURL, layout: { height:400, width:400 }});
     var pane = SC.ControlTestPane.design({ height: 100 })
     .add("basic", SC.ScrollView, {
 
@@ -40,7 +40,20 @@
     })
     .add("aria-attributes", SC.ScrollView, {
       contentView: iv
+    })
+
+    .add("overlaidScrollers", SC.ScrollView, {
+      verticalOverlay: YES,
+      horizontalOverlay: YES
+    })
+
+    .add("overlaid touch scrollers", SC.ScrollView, {
+      verticalOverlay: YES,
+      verticalScrollerView: SC.OverlayScrollerView,
+      horizontalOverlay: YES,
+      horizontalScrollerView: SC.OverlayScrollerView
     });
+
 
   // ..........................................................
   // TEST VIEWS
@@ -166,5 +179,60 @@
     equals(verticalScrollerView.$().attr('aria-valuenow'), view.get('horizontalScrollOffset'), "verticalScroller has aria-valuenow set");
 
   });
+
+  test('Scroller fading', function() {
+    var view = pane.view('overlaid touch scrollers'),
+        verticalScroller = view.get('verticalScrollerView'),
+        opac;
+
+    stop(2000);
+    expect(2);
+    SC.RunLoop.begin();
+    verticalScroller.fadeOut(0.1);
+    SC.RunLoop.end();
+    setTimeout(function() {
+      opac = verticalScroller.$('.thumb').css('opacity');
+      equals(opac, '0', 'after fadeout, scroller thumb opacity should equal zero');
+      SC.RunLoop.begin();
+      verticalScroller.fadeIn(0.1);
+      SC.RunLoop.end();
+      setTimeout(function() {
+        opac = verticalScroller.$('.thumb').css('opacity');
+        equals(opac, '0.5', 'after fadeout, scroller thumb opacity should equal 0.5');
+        start();
+      }, 200)
+
+    }, 1000);
+
+  });
+
+  test('ScrollView-directed scroller fading', function() {
+    var view = pane.view('overlaid touch scrollers'),
+        verticalScroller = view.get('verticalScrollerView'),
+        opac;
+
+    stop(2000);
+    expect(2);
+    SC.RunLoop.begin();
+    view._sc_fadeOutScrollers();
+    SC.RunLoop.end();
+    setTimeout(function() {
+      opac = verticalScroller.$('.thumb').css('opacity');
+      equals(opac, '0', 'after fadeout, scroller thumb opacity should equal zero');
+      SC.RunLoop.begin();
+      view._sc_fadeInScrollers();
+      SC.RunLoop.end();
+      setTimeout(function() {
+        opac = verticalScroller.$('.thumb').css('opacity');
+        equals(opac, '0.5', 'after fadeout, scroller thumb opacity should equal 0.5');
+        start();
+      }, 200)
+
+    }, 1000);
+
+
+  });
+
+
 
 })();

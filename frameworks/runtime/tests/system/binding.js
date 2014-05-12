@@ -9,7 +9,7 @@
 // ========================================================================
 /*globals module, test, ok, isObj, equals, expects */
 
-var fromObject, midObject, toObject, binding, Bon1, bon2, first, second, third, binding1, binding2;
+var FromObject, fromObject, midObject, toObject, binding, Bon1, bon2, first, second, third, binding1, binding2;
 
 module("basic object binding", {
 
@@ -366,7 +366,67 @@ test("two bindings to the same value should sync in the order they are initializ
 
 });
 
-module("AND binding", {
+module("Binding transforms", {
+  setup: function () {
+    BindableObject = SC.Object.extend({
+      booleanValue: NO,
+      numericValue: 42,
+      stringValue: 'forty-two',
+      arrayValue: [4, 2],
+      undefinedValue: undefined
+    });
+    // temporarily set up two source objects in the SC namespace so we can
+    // use property paths to access them
+    SC.testControllerA = BindableObject.create();
+    SC.testControllerB = BindableObject.create();
+  },
+
+  teardown: function () {
+    SC.testControllerA.destroy();
+    delete SC.testControllerA;
+    SC.testControllerB.destroy();
+    delete SC.testControllerB;
+  }
+});
+
+test('Binding sync when only transformed value has changed', function () {
+  var toObject;
+  SC.run(function () {
+    toObject = SC.Object.create({
+      transformedValue: null,
+      transformedValueBinding: SC.Binding.oneWay('SC.testControllerA.undefinedValue').transform(function (value, binding) {
+        if (value === undefined) {
+          return 'VALUE IS UNDEFINED';
+        } else {
+          return value;
+        }
+      })
+    });
+  });
+
+  equals(toObject.get('transformedValue'), 'VALUE IS UNDEFINED', 'value is undefined, so bound value should be');
+});
+
+test("ALL THE OTHER BINDING TRANSFORMS.");
+
+test("equalTo", function() {
+  SC.RunLoop.begin();
+  var toObject = SC.Object.create({
+    isFortyTwo: null,
+    isFortyTwoBinding: SC.Binding.oneWay('SC.testControllerA.numericValue').equalTo(42)
+  });
+  SC.RunLoop.end();
+
+  equals(toObject.get('isFortyTwo'), true, "Value is equal to 42, so bound value should should be");
+
+  SC.RunLoop.begin();
+  SC.testControllerA.set('numericValue', 45);
+  SC.RunLoop.end();
+
+  equals(toObject.get('isFortyTwo'), false, "Value is no longer 42, so bound value should be");
+});
+
+module("Binding transform: `and`", {
 
   setup: function () {
     // temporarily set up two source objects in the SC namespace so we can
@@ -386,9 +446,10 @@ module("AND binding", {
 
   teardown: function () {
     SC.testControllerA.destroy();
+    delete SC.testControllerA;
     SC.testControllerB.destroy();
+    delete SC.testControllerB;
   }
-
 });
 
 test("bound value should be YES if both sources are YES", function () {
@@ -721,4 +782,44 @@ test("works with local path", function () {
   SC.RunLoop.end();
 
   equals(TestNamespace.toObject.get('relative'), "newerValue");
+});
+
+module("Overriding binding in subclass", {
+  setup: function() {
+    FromObject = SC.Object.extend({
+      localValue1: 'hello',
+      localValue2: 'world',
+      value: null,
+      valueBinding: SC.Binding.oneWay('.localValue1')
+    });
+  },
+  teardown: function() {
+    FromObject = null;
+  }
+});
+
+test("Bindings override in subclasses.", function() {
+  SC.LOG_DUPLICATE_BINDINGS = NO; // clean consoles
+
+  SC.RunLoop.begin();
+  fromObject = FromObject.create();
+  SC.RunLoop.end();
+
+  equals(fromObject.get('value'), 'hello', "PRELIM: Superclass binding gives value of");
+
+  fromObject.destroy();
+
+  SC.RunLoop.begin();
+  fromObject = FromObject.create({
+    valueBinding: SC.Binding.oneWay('.localValue2')
+  });
+  SC.RunLoop.end();
+
+  ok(fromObject._bindings.length === 1, "Duplicate bindings are not created.")
+
+  equals(fromObject.get('value'), 'world', "Superclass binding should have been overridden in the subclass, giving value a value of");
+
+  fromObject.destroy();
+
+  SC.LOG_DUPLICATE_BINDINGS = YES;
 });
